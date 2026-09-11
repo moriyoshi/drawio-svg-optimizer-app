@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "drawio-svg-optimizer-app",
+  // No account_id on purpose: wrangler infers it when CLOUDFLARE_API_TOKEN can
+  // reach exactly one account. If the token can reach several, wrangler fails
+  // and lists them -- pass CLOUDFLARE_ACCOUNT_ID from CI in that case.
+  "compatibility_date": "2026-09-01",
+
+  // There is no Worker script. The app is entirely client-side and this just
+  // serves what `next build` emits into out/. Pages was folded into Workers, so
+  // it ships as a Worker with static assets rather than through legacy Pages
+  // (`wrangler pages ... --force`).
+  "assets": {
+    "directory": "./out",
+    // out/ is built with trailingSlash: true, so /foo/ -> /foo/index.html.
+    // Next generates the 404.html this points at.
+    "not_found_handling": "404-page"
+  },
+
+  // The zone is already registered on the deploying account, so deploy attaches
+  // the custom domain on its own.
+  "routes": [{ "pattern": "drawio-svg-optimizer.app", "custom_domain": true }],
+
+  "observability": { "enabled": true }
+}

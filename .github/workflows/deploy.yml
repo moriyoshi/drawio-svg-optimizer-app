@@ -1,0 +1,141 @@
+# Deploy to Cloudflare.
+#
+# The app is entirely client-side — `next build` emits a static `out/` and there
+# is no server component — so this uploads assets and nothing else. There is no
+# Worker script, no build image on Cloudflare's side, and none of the optimizer
+# library's Node concerns (koffi, the on-disk font cache, subprocess font
+# lookup) are in play.
+#
+# WHY WORKERS AND NOT PAGES: Cloudflare folded Pages into Workers. `wrangler
+# pages ...` now prints "Delegating to the latest version of Cloudflare Pages,
+# now part of Cloudflare Workers", and reaching the old product needs an
+# explicit `--force` whose own message calls it "the previous version". So this
+# deploys a Worker with static assets — which is what that delegation lands on —
+# rather than pinning CI to a path being sunset.
+#
+# BRANCHES: `main` runs `wrangler deploy`, which promotes to production at
+# drawio-svg-optimizer.app. A pull request runs `wrangler versions upload`,
+# which uploads a version and returns a preview URL **without** promoting it —
+# the Workers equivalent of a Pages preview deploy. Nothing a PR does can change
+# what production serves.
+#
+# REQUIRED SECRET: `CLOUDFLARE_API_TOKEN` with **Account → Workers Scripts →
+# Edit** (plus **Zone → Workers Routes → Edit** on drawio-svg-optimizer.app, so
+# the custom domain in wrangler.jsonc can be attached). Create it at
+# https://dash.cloudflare.com/profile/api-tokens; the local `wrangler login`
+# OAuth credential is a different thing and is not usable from CI.
+#
+# ACCOUNT: wrangler.jsonc deliberately has no `account_id`, so wrangler uses the
+# one account the token can reach. If the token can reach more than one, the
+# deploy fails with the candidates listed -- add `CLOUDFLARE_ACCOUNT_ID` as a
+# repository variable (it is not a secret) and pass it as `accountId` below.
+#
+# Forked pull requests do not receive secrets, so the deploy job is skipped for
+# them. `check` and the build still run, which is the part that matters.
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Biome check
+        run: npx biome ci .
+
+      - name: Typecheck
+        run: npm run typecheck
+
+  deploy:
+    name: Deploy
+    needs: check
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      # Only to leave the preview URL on the pull request.
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (static export -> out/)
+        run: npm run build
+
+      # The one check that no unit test can replace. The optimizer's
+      # browser-ness is entirely resolution-time — an export condition plus a
+      # `browser` field object map that a bundler may honour independently — and
+      # honouring only the first still builds, then fails in the browser:
+      # `node:zlib` has no implementation, and harfbuzzjs fetches `hb.wasm`
+      # relative to the document at module-evaluation time, so importing the
+      # entry point throws even with label conversion off. This greps the built
+      # client chunks for those markers, and it gates the deploy on purpose.
+      - name: Audit client bundle
+        run: npm run audit:bundle
+
+      - name: Upload preview version
+        id: preview
+        if: github.event_name == 'pull_request'
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Uploads without promoting: production keeps serving the last
+          # `wrangler deploy`.
+          command: versions upload
+
+      - name: Deploy to production
+        if: github.event_name != 'pull_request'
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Name, assets directory and custom domain all come from
+          # wrangler.jsonc, so `npm run deploy` locally and this job push the
+          # same thing the same way.
+          command: deploy
+
+      - name: Comment the preview URL
+        if: github.event_name == 'pull_request' && steps.preview.outputs.deployment-url != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          URL: ${{ steps.preview.outputs.deployment-url }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          # --edit-last keeps one rolling comment rather than one per push;
+          # --create-if-none covers the first run, when there is none to edit.
+          gh pr comment "${PR}" \
+            --body "Preview for \`${GITHUB_SHA::7}\`: ${URL}" \
+            --edit-last --create-if-none

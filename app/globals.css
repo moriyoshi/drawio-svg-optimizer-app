@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+/* A developer tool: quiet surface, one accent, legible at small sizes.
+   Both themes are defined because the output being previewed is often itself
+   theme-aware — draw.io exports use light-dark() — and judging a diagram
+   against the wrong background is misleading. */
+@theme {
+  --color-bg: #fbfbfa;
+  --color-surface: #ffffff;
+  --color-text: #1a1d21;
+  --color-muted: #5c646d;
+  --color-faint: #8b949e;
+  --color-border: #e2e4e8;
+  --color-border-strong: #c9ced6;
+  --color-accent: #2f6feb;
+  --color-accent-soft: #eaf0fd;
+  --color-danger: #c0392b;
+  --color-danger-soft: #fdeeec;
+  --color-warn: #9a6700;
+  --color-warn-soft: #fdf6e3;
+  --color-ok: #1a7f37;
+  --container-content: 1040px;
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Sans", "Noto Sans JP",
+    sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  @theme {
+    --color-bg: #0f1216;
+    --color-surface: #161a20;
+    --color-text: #e6e9ee;
+    --color-muted: #9aa4b1;
+    --color-faint: #6b7683;
+    --color-border: #262c35;
+    --color-border-strong: #3a424e;
+    --color-accent: #6ea8fe;
+    --color-accent-soft: #17243a;
+    --color-danger: #f0776a;
+    --color-danger-soft: #2a1715;
+    --color-warn: #d9a441;
+    --color-warn-soft: #2a2313;
+    --color-ok: #4ac26b;
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-bg font-sans text-[15px] text-text antialiased;
+  }
+  h1 {
+    @apply font-bold text-2xl leading-tight tracking-tight;
+  }
+  h2 {
+    @apply font-semibold text-lg leading-snug;
+  }
+  h3 {
+    @apply font-semibold text-base;
+  }
+  a {
+    @apply text-accent underline-offset-2 hover:underline;
+  }
+  code {
+    @apply font-mono text-[0.9em];
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-lg border border-border bg-surface;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-border-strong px-3 py-1.5 font-medium text-sm no-underline transition-colors hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent;
+  }
+  .btn-primary {
+    @apply border-accent bg-accent px-4 text-white hover:opacity-90 hover:bg-accent;
+  }
+}
+
+/* The preview checkerboard, so a transparent diagram is distinguishable from a
+   white one — draw.io exports both and they look identical on a white card. */
+.checkerboard {
+  background-color: #ffffff;
+  background-image:
+    linear-gradient(45deg, #eceff3 25%, transparent 25%),
+    linear-gradient(-45deg, #eceff3 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #eceff3 75%),
+    linear-gradient(-45deg, transparent 75%, #eceff3 75%);
+  background-size: 16px 16px;
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+}
