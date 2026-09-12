@@ -25,6 +25,13 @@
 # https://dash.cloudflare.com/profile/api-tokens; the local `wrangler login`
 # OAuth credential is a different thing and is not usable from CI.
 #
+# NO SECRET NEEDED FOR THE LIBRARY: `@moriyoshi/drawio-svg-optimizer` lives in
+# GitHub Packages, which requires a token even for a public package, but the
+# automatic `GITHUB_TOKEN` is enough — hence `packages: read` on both jobs and
+# `NODE_AUTH_TOKEN` on `npm ci`. Forked pull requests get a read-only
+# `GITHUB_TOKEN`, which still covers reading a public package, so `check` runs
+# for them as before.
+#
 # ACCOUNT: wrangler.jsonc deliberately has no `account_id`, so wrangler uses the
 # one account the token can reach. If the token can reach more than one, the
 # deploy fails with the candidates listed -- add `CLOUDFLARE_ACCOUNT_ID` as a
@@ -50,6 +57,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # The optimizer library comes from GitHub Packages, which demands a token
+      # even to read a public package.
+      packages: read
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -59,9 +69,15 @@ jobs:
         with:
           node-version: '22.x'
           cache: 'npm'
+          # Writes the credential half of the npm config; the scope -> registry
+          # half is in the repository's own .npmrc.
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@moriyoshi'
 
       - name: Install dependencies
         run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Biome check
         run: npx biome ci .
@@ -76,6 +92,9 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
+      # The optimizer library comes from GitHub Packages, which demands a token
+      # even to read a public package.
+      packages: read
       # Only to leave the preview URL on the pull request.
       pull-requests: write
     steps:
@@ -87,9 +106,13 @@ jobs:
         with:
           node-version: '22.x'
           cache: 'npm'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@moriyoshi'
 
       - name: Install dependencies
         run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build (static export -> out/)
         run: npm run build

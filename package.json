@@ -15,7 +15,7 @@
     "preview": "npm run build && wrangler dev"
   },
   "dependencies": {
-    "drawio-svg-optimizer": "github:moriyoshi/drawio-svg-optimizer",
+    "@moriyoshi/drawio-svg-optimizer": "^0.1.1",
     "fflate": "^0.8.2",
     "next": "^16.2.9",
     "react": "^19.0.0",

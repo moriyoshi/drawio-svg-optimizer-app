@@ -28,7 +28,7 @@ import {
   familiesDeclaredIn,
   repairFamily,
   substituteFamily,
-} from 'drawio-svg-optimizer/fonts';
+} from '@moriyoshi/drawio-svg-optimizer/fonts';
 
 /** Above this, `text=` subsetting is dropped and the whole family is fetched. */
 const MAX_SUBSET_CHARS = 500;
