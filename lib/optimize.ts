@@ -6,7 +6,7 @@
  * - The browser build is ~1.2 MB and touches `document` at call time, so it must
  *   be reached through a dynamic `import()` inside an event handler — never in
  *   the initial bundle, never during a server render.
- * - `drawio-svg-optimizer/browser` is imported explicitly rather than by the bare
+ * - `@moriyoshi/drawio-svg-optimizer/browser` is imported explicitly rather than by the bare
  *   specifier. Both resolve to the same file, but the bare one relies on the
  *   bundler honouring the `browser` export condition, and being explicit means a
  *   misconfigured bundler fails loudly here instead of quietly shipping the Node
@@ -105,7 +105,7 @@ export async function optimizeOne(
   }
 
   try {
-    const { optimizeDrawioSvg } = await import('drawio-svg-optimizer/browser');
+    const { optimizeDrawioSvg } = await import('@moriyoshi/drawio-svg-optimizer/browser');
     const result = await optimizeDrawioSvg(svg, libraryOptions(options));
     return {
       id,

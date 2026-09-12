@@ -8,38 +8,54 @@ server-side component — `next build` emits a static site. On the reference
 export that is 504 KB → 17 KB raw, and 346 KB → 2.6 KB gzipped.
 
 ```bash
-npm install
+npm install         # needs a GitHub Packages token — see below
 npm run dev         # http://localhost:3250
 ```
 
 ## The library dependency
 
-`drawio-svg-optimizer` is not on npm yet, so `package.json` depends on the
-GitHub repository directly:
-
-```json
-"drawio-svg-optimizer": "github:moriyoshi/drawio-svg-optimizer"
-```
-
-npm clones it, runs the package's own `prepare` (`npm run build`) to produce
-`dist/`, and installs the result as a real directory under `node_modules` — so
-the package's `exports` subpaths resolve normally. A local directory spec
-(`file:../drawio-svg-optimizer`) is **not** usable in its place: npm turns it
-into a symlink, the resolved path lands outside `node_modules`, and Turbopack
-then cannot resolve the subpaths at all —
+The optimizer is consumed as a published package, `@moriyoshi/drawio-svg-optimizer`,
+under a normal version range. It is published to **GitHub Packages**, not to the
+public npm registry, so the scope is pointed there by the repository's `.npmrc`:
 
 ```
-Module not found: Can't resolve 'drawio-svg-optimizer/browser'
+@moriyoshi:registry=https://npm.pkg.github.com
 ```
 
-The spec tracks `main`; the exact commit is pinned by `package-lock.json`, so
-`npm ci` is reproducible and picking up library changes is a deliberate
-`npm update drawio-svg-optimizer`. The lock records the resolved URL as
-`git+ssh://`, which is just how npm normalises a GitHub spec — npm falls back to
-HTTPS for public repositories, so CI installs without an SSH key (verified with
-`npm ci` against a cold cache and `GIT_SSH_COMMAND=false`).
+That file holds the mapping and nothing else. **GitHub Packages requires a token
+even to read a public package**, and the credential is kept out of the repo:
 
-Switch the spec to a version range once the package is published.
+- **CI** — `actions/setup-node` writes it, given `registry-url` and `scope`, from
+  `NODE_AUTH_TOKEN`. The automatic `GITHUB_TOKEN` suffices; both jobs in
+  `deploy.yml` therefore ask for `packages: read`.
+- **Locally** — put a personal access token with the `read:packages` scope in
+  `~/.npmrc`:
+
+  ```
+  //npm.pkg.github.com/:_authToken=ghp_...
+  ```
+
+  Or, if you use the `gh` CLI: `gh auth refresh -h github.com -s read:packages`
+  then `gh auth token` for the value. Without it, `npm install` fails on
+  `@moriyoshi/drawio-svg-optimizer` with a 401.
+
+Writing `//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}` into the checked-in
+`.npmrc` — the arrangement GitHub's own docs suggest — is deliberately avoided:
+npm resolves `${...}` eagerly for *every* command, so on a machine without that
+variable even `npm run dev` dies with `Failed to replace env in config`.
+
+Previously this depended on the git repository (`github:moriyoshi/drawio-svg-optimizer`),
+which made npm clone and build the library on every fresh install. A published
+tarball removes that, and upgrades are now `npm update @moriyoshi/drawio-svg-optimizer`
+against a version range rather than a moving branch.
+
+A local directory spec (`file:../drawio-svg-optimizer`) remains **not** usable as
+a substitute for either: npm turns it into a symlink, the resolved path lands
+outside `node_modules`, and Turbopack then cannot resolve the subpaths at all —
+
+```
+Module not found: Can't resolve '@moriyoshi/drawio-svg-optimizer/browser'
+```
 
 ## Why `npm run audit:bundle` exists
 
@@ -95,7 +111,7 @@ With label conversion on, the browser shapes text with whatever fonts the
 *visitor* has — so the same diagram would optimize differently on different
 machines. `lib/fonts.ts` removes that dependence: it works out which families the
 document asks for, resolves each through the library's own repair/substitution
-tables (`drawio-svg-optimizer/fonts`), and loads the result from Google Fonts
+tables (`@moriyoshi/drawio-svg-optimizer/fonts`), and loads the result from Google Fonts
 *under the name the document uses*. An `@font-face` may name its family whatever
 it likes, so a rule named `Helvetica` whose source is Arimo makes the page's
 Helvetica resolve to a face everyone can get — and Arimo, Tinos and Cousine are
